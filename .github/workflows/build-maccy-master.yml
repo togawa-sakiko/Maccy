@@ -76,7 +76,7 @@ jobs:
           plutil -lint "$app/Contents/Info.plist"
           executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
           test -x "$app/Contents/MacOS/$executable"
-          lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/$executable"
+          lipo "$app/Contents/MacOS/$executable" -verify_arch arm64 x86_64
           lipo -info "$app/Contents/MacOS/$executable" >> output/BUILD-INFO.txt
           # ditto preserves the bundle's symlinks and executable modes.
           ditto -c -k --sequesterRsrc --keepParent "$app" "output/Maccy-master-${SOURCE_SHA:0:12}-unsigned-universal.zip"
