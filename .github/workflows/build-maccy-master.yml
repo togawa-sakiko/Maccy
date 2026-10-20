@@ -1,0 +1,92 @@
+name: Build pinned Maccy master (unsigned)
+
+"on":
+  push:
+    branches: [build/maccy-master-c700182f]
+    paths: [.github/workflows/build-maccy-master.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      SOURCE_SHA: c700182f638d9d29bfa0aec9dc560422698854c6
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out exact upstream source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: togawa-sakiko/Maccy
+          ref: c700182f638d9d29bfa0aec9dc560422698854c6
+          persist-credentials: false
+      - name: Verify source and toolchain
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -d "$DEVELOPER_DIR"
+          mkdir -p output
+          {
+            echo "Source: https://github.com/p0deje/Maccy/commit/$SOURCE_SHA"
+            echo "Source SHA: $SOURCE_SHA"
+            echo "Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "Signing: no Developer ID signing or notarization"
+            echo "Targets: arm64 and x86_64; minimum macOS 14.0"
+            xcodebuild -version
+            xcrun swift --version
+            sw_vers
+          } | tee output/BUILD-INFO.txt
+          cp Maccy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved output/Package.resolved
+      - name: Resolve only locked dependencies
+        run: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies \
+            -project Maccy.xcodeproj -scheme Maccy \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/MaccyPackages" \
+            -onlyUsePackageVersionsFromResolvedFile 2>&1 | tee output/resolve.log
+          cmp output/Package.resolved Maccy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+      - name: Build unsigned universal Release app
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -project Maccy.xcodeproj -scheme Maccy -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/MaccyDerivedData" \
+            -clonedSourcePackagesDirPath "$RUNNER_TEMP/MaccyPackages" \
+            -disableAutomaticPackageResolution \
+            -onlyUsePackageVersionsFromResolvedFile \
+            -skipMacroValidation \
+            'ARCHS=arm64 x86_64' ONLY_ACTIVE_ARCH=NO \
+            MACOSX_DEPLOYMENT_TARGET=14.0 \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY= DEVELOPMENT_TEAM= \
+            2>&1 | tee output/build.log
+          cmp output/Package.resolved Maccy.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+      - name: Check bundle and package with checksums
+        run: |
+          set -euo pipefail
+          app="$RUNNER_TEMP/MaccyDerivedData/Build/Products/Release/Maccy.app"
+          test -d "$app"
+          plutil -lint "$app/Contents/Info.plist"
+          executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")
+          test -x "$app/Contents/MacOS/$executable"
+          lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/$executable"
+          lipo -info "$app/Contents/MacOS/$executable" >> output/BUILD-INFO.txt
+          # ditto preserves the bundle's symlinks and executable modes.
+          ditto -c -k --sequesterRsrc --keepParent "$app" "output/Maccy-master-${SOURCE_SHA:0:12}-unsigned-universal.zip"
+          cd output
+          shasum -a 256 Maccy-*.zip Package.resolved BUILD-INFO.txt > SHA256SUMS.txt
+          shasum -a 256 -c SHA256SUMS.txt
+      - name: Upload app, provenance and diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: Maccy-master-c700182f638d-unsigned
+          path: output/
+          if-no-files-found: error
+          retention-days: 1
