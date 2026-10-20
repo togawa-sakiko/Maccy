@@ -14,7 +14,7 @@ jobs:
     timeout-minutes: 45
     env:
       SOURCE_SHA: c700182f638d9d29bfa0aec9dc560422698854c6
-      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
     defaults:
       run:
         shell: bash
