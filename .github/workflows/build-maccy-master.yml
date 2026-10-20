@@ -36,6 +36,7 @@ jobs:
             echo "Source SHA: $SOURCE_SHA"
             echo "Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
             echo "Signing: no Developer ID signing or notarization"
+            echo "Optimization: Swift -Onone; workaround for upstream FloatingPanel.deinit compiler optimizer crash"
             echo "Targets: arm64 and x86_64; minimum macOS 14.0"
             xcodebuild -version
             xcrun swift --version
@@ -61,7 +62,7 @@ jobs:
             -disableAutomaticPackageResolution \
             -onlyUsePackageVersionsFromResolvedFile \
             -skipMacroValidation \
-            'ARCHS=arm64 x86_64' ONLY_ACTIVE_ARCH=NO \
+            'ARCHS=arm64 x86_64' ONLY_ACTIVE_ARCH=NO SWIFT_OPTIMIZATION_LEVEL=-Onone \
             MACOSX_DEPLOYMENT_TARGET=14.0 \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY= DEVELOPMENT_TEAM= \
